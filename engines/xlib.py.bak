@@ -1,0 +1,195 @@
+from Xlib import X, XK, display, keysymdef
+import threading
+from error import EngineError
+from multiprocessing import Queue
+import string
+
+class EngineXlib(threading.Thread):
+	poll_run = False
+	running = True
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	print "building key map..."
+	for group in keysymdef.__all__:
+		XK.load_keysym_group(group)
+	
+	modifiers = [
+		("Control", 	XK.XK_Control_L, 	X.ControlMask, 	True),
+		("Control", 	XK.XK_Control_R, 	X.ControlMask, 	True),
+		("Alt", 	XK.XK_Alt_L, 		X.Mod1Mask, 	True),
+		("Alt", 	XK.XK_ISO_Level3_Shift, X.Mod5Mask, 	True),
+		("Super", 	XK.XK_Super_L, 		X.Mod4Mask, 	True),
+		("Shift", 	XK.XK_Shift_L, 		X.ShiftMask, 	True),
+		("Shift", 	XK.XK_Shift_R, 		X.ShiftMask, 	True),
+		("Num Lock", 	XK.XK_Num_Lock, 	X.Mod2Mask, 	False),
+		("###Mod3?",	-1, 			X.Mod3Mask, 	True),
+		("###Lock?", 	-1           , 		X.LockMask, 	False)]
+	
+	modifier_keysyms = [i[1] for i in modifiers if i[3]]
+	
+	print "HERE WE GO!"
+	print modifier_keysyms
+	
+	#modifiers = [
+	#	XK.XK_Control_L, 
+	#	XK.XK_Control_R, 
+	#	XK.XK_Shift_L,
+	#	XK.XK_Shift_R,
+	#modifiers = dict([(i, False) for i in modifiers])
+	
+	
+	mask = 0
+	better_names = [
+		('Alt_L', 'Alt'),
+		('Control', 'Ctrl'),
+		('ISO_Level3_Shift', 'Alt_Gr'),
+		#('Prior', 'Page_Up'),
+		#('Next', 'Page_Down'),
+		('KP_End', 	'KP_1'),
+		('KP_Down', 	'KP_2'),
+		('KP_Page_Down','KP_3'),
+		('KP_Left', 	'KP_4'),
+		('KP_Begin', 	'KP_5'),
+		('KP_Right', 	'KP_6'),
+		('KP_Home', 	'KP_7'),
+		('KP_Up', 	'KP_8'),
+		('KP_Page_Up', 	'KP_9'),
+		('KP_Insert', 	'KP_0'),
+		('KP_Divide',	'KP_/'),
+		('KP_Multiply',	'KP_*'),
+		('KP_Subtract',	'KP_-'),
+		('KP_Add',	'KP_+'),
+		('KP', 'NumPad'),
+		('_', ' ')]
+	#for k, v in better_names:
+	#	print k, v
+	#print X.ControlMask
+	#for modifier in modifiers:
+	#	mask |= modifier
+	def __init__ (self):
+		threading.Thread.__init__(self)
+		
+		self.disp = display.Display()
+		self.root = self.disp.screen().root
+		# we tell the X server we want to catch keyPress event
+		#self.root.change_attributes(event_mask = X.KeyPressMask)
+
+
+		#Extract names of just the keysyms.
+		keysyms_list = [n for n in dir(XK) if n.startswith('XK_')]
+		self.keysyms = {}
+		for keysym in keysyms_list:
+			pretty = keysym[3:]
+			
+			for k, v in self.better_names:
+				pretty = pretty.replace(k,v)
+			
+			for i in ('Left', 'Right'):
+				if pretty[-2:] == " "+i[0]:
+					pretty = "%s %s" % (i[0], pretty[:-2])
+			
+			pretty = pretty[0].upper()+pretty[1:]
+			
+			self.keysyms[getattr(XK, keysym)] = pretty
+	def run(self):
+		self.running = True
+		while self.running:
+			if self.poll_run:
+				#print "Thread entered polling section"
+				self.poll_callback(self.pollBlocking())
+				self.poll_run = False
+				
+				
+				
+	def poll(self, callback):
+		self.poll_callback = callback
+		self.poll_run = True
+	
+	def pollBlocking(self):
+		#print
+		self.root.grab_keyboard(1, X.GrabModeAsync, X.GrabModeAsync, X.CurrentTime) 
+		while True:
+			e = self.disp.next_event()
+
+
+			if e.type == X.KeyPress:
+				keycode = e.detail
+				keysym = self.disp.keycode_to_keysym(keycode, 0)
+				if keysym in self.modifier_keysyms:
+					#self.modifiers[keysym] = (e.type == X.KeyPress)
+					continue
+				#keystring = self.disp.lookup_string(keysym)
+				#print self.disp.get_modifier_mapping()
+				#print "%s mask" % bin(self.mask)
+				
+				
+				#print "keycode: %s" % keycode
+				#print "keysym: %s" % keysym
+				#print "\n\n"
+				#print "%s keysym" % bin(keysym)
+				#print "%s state" % bin(e.state)
+				#print "map: %s" % self.keysyms[keysym]
+				#print "keysym as unicode: %s" % unichr(keysym)
+				#print "keystring: %s" % keystring
+				key = ""
+				#for modifier, status in self.modifiers.items():
+				#	if status:
+				#		key+="%s + " % self.keysym_to_string(modifier)
+				
+				#Pretty!
+				key = dict([(i[0], True) for i in self.modifiers if (i[3] and e.state & i[2])])
+				key = key.keys()
+				key.append(self.keysym_to_string(keysym))
+				#print self.keysym_to_string(keysym)
+				#print key
+				key = " + ".join(key)
+				
+				#print "KEY: %s" % key
+				if key == "Escape":
+					break;
+				#break;
+				#print "F1: %s" % XK.XK_F1
+				#print dir(XK)
+				#break
+		self.disp.ungrab_keyboard(X.CurrentTime)
+		self.disp.flush()
+		return 123
+	def stop(self):
+		self.running = False
+	def keysym_to_string(self, keysym):
+		print "============"
+		print "KEYSYM HEX: 0x%x" % keysym
+		if 0x20 < keysym < 0x7E:
+			# or \
+			#  0xA0 < keysym < 0x10FFFF:
+			print "UNICODE: %s" % unichr(keysym)
+			return "q"
+	
+	
+		string = self.disp.lookup_string(keysym)
+		print "LOOKUP: %s" % string
+		if string and len(string.strip()):
+			o = ord(string)
+			print o
+			print string
+			if o >  0x1F and o < 0x7B \
+			   or o >  0x9F:
+				return string.lower()
+		if keysym in self.keysyms:
+			return self.keysyms[keysym]
+		else:
+			return "AAH NOT SET!"
+
+def getInstance():
+	return EngineXlib()
+
+
